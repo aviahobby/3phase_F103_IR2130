@@ -24,7 +24,7 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-
+#include "luts.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -34,18 +34,43 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
+#define PWM_DMA_CHANELS 3
 
+#define TABLE_SIZE 128
+#define BURST_SIZE (PWM_DMA_CHANELS * TABLE_SIZE)
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
 /* USER CODE BEGIN PM */
+
+#if (PWM_DMA_CHANELS == 3)
+//#define SCALE_3PHASE_AMPLITUDE scale_3phase_tables_half
+#define SCALE_3PHASE_AMPLITUDE scale_3phase_tables_zero
+#define TIM_DMABURSTLENGTH_NUMBER_TRANSFERS TIM_DMABURSTLENGTH_3TRANSFERS
+#elif (PWM_DMA_CHANELS == 4)
+//#define SCALE_4PHASE_AMPLITUDE scale_4phase_tables_half
+#define SCALE_4PHASE_AMPLITUDE scale_4phase_tables_zero
+#define TIM_DMABURSTLENGTH_NUMBER_TRANSFERS TIM_DMABURSTLENGTH_4TRANSFERS
+#else
+#error "Unsupported number of PWM channels"
+#endif
+
+#define BUILD_LUT LUT_sine_calculate
+//#define BUILD_LUT LUT_triangle_calculate
+//#define BUILD_LUT LUT_const_fill
 
 /* USER CODE END PM */
 
 /* Private variables ---------------------------------------------------------*/
 
 /* USER CODE BEGIN PV */
-
+/* Private variables ---------------------------------------------------------*/
+uint16_t pwm_amplitude;
+uint16_t BurstBuffer_reference[BURST_SIZE];
+uint16_t BurstBuffer_1[BURST_SIZE];
+uint16_t BurstBuffer_2[BURST_SIZE];
+volatile uint8_t buffer_selected = 0;
+volatile int16_t u_amp, v_amp, w_amp, t_amp;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -91,15 +116,102 @@ int main(void)
   MX_TIM1_Init();
   /* USER CODE BEGIN 2 */
 
+  uint16_t DataArrayU[TABLE_SIZE];
+  uint16_t DataArrayV[TABLE_SIZE];
+  uint16_t DataArrayW[TABLE_SIZE];
+  BUILD_LUT(DataArrayU, TABLE_SIZE, &pwm_amplitude, 0,   400);
+  BUILD_LUT(DataArrayV, TABLE_SIZE, &pwm_amplitude, 120, 400);
+  BUILD_LUT(DataArrayW, TABLE_SIZE, &pwm_amplitude, 240, 400);
+
+#if (PWM_DMA_CHANELS == 4)
+  uint16_t DataArrayT[TABLE_SIZE];
+  BUILD_LUT(DataArrayT, TABLE_SIZE, &pwm_amplitude, 90,  400);
+#endif
+  TIM1->ARR = pwm_amplitude;
+
+  u_amp = 100;
+  v_amp = 100;
+  w_amp = 100;
+  t_amp = 100;
+
+#if (PWM_DMA_CHANELS == 3)
+  merge_3phase_tables(BurstBuffer_reference, DataArrayU, DataArrayV, DataArrayW, TABLE_SIZE);
+  SCALE_3PHASE_AMPLITUDE(BurstBuffer_1, BurstBuffer_reference, u_amp, v_amp, w_amp, pwm_amplitude, TABLE_SIZE);
+  SCALE_3PHASE_AMPLITUDE(BurstBuffer_2, BurstBuffer_reference, u_amp, v_amp, w_amp, pwm_amplitude, TABLE_SIZE);
+  TIM1->CCR4 = pwm_amplitude / 2;
+#elif (PWM_DMA_CHANELS == 4)
+  merge_4phase_tables(BurstBuffer_reference, DataArrayU, DataArrayV, DataArrayW, DataArrayT, TABLE_SIZE);
+  SCALE_4PHASE_AMPLITUDE(BurstBuffer_1, BurstBuffer_reference, u_amp, v_amp, w_amp, t_amp, pwm_amplitude, TABLE_SIZE);
+  SCALE_4PHASE_AMPLITUDE(BurstBuffer_2, BurstBuffer_reference, u_amp, v_amp, w_amp, t_amp, pwm_amplitude, TABLE_SIZE);
+#endif
+
+  if (HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_12) == GPIO_PIN_RESET)
+  {
+     GPIOB->ODR &= ~GPIO_PIN_12;
+  } else {
+     GPIOB->ODR |= GPIO_PIN_12;
+  }
+  HAL_Delay(100);
+
+  HAL_TIM_PWM_Start   (&htim1, TIM_CHANNEL_1);
+  HAL_TIMEx_PWMN_Start(&htim1, TIM_CHANNEL_1);
+  HAL_TIM_PWM_Start   (&htim1, TIM_CHANNEL_2);
+  HAL_TIMEx_PWMN_Start(&htim1, TIM_CHANNEL_2);
+  HAL_TIM_PWM_Start   (&htim1, TIM_CHANNEL_3);
+  HAL_TIMEx_PWMN_Start(&htim1, TIM_CHANNEL_3);
+  HAL_TIM_PWM_Start   (&htim1, TIM_CHANNEL_4);
+
+  HAL_TIM_DMABurst_MultiWriteStart(&htim1,
+		                           TIM_DMABASE_CCR1,
+								   TIM_DMA_UPDATE,
+								   (uint32_t*)BurstBuffer_1,
+								   TIM_DMABURSTLENGTH_NUMBER_TRANSFERS,
+								   BURST_SIZE);
+  buffer_selected = 0;
+
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
+  int16_t tmp_amp = -100;
+  typedef enum
+  { UP, DOWN } dir_t;
+  dir_t dir = UP;
+
   while (1)
   {
+	  if (dir == UP)
+	  {
+	     tmp_amp += 1;
+	  } else {
+		 tmp_amp -= 1;
+	  }
+
+	  if (tmp_amp >= 100)
+	  {
+		  dir = DOWN;
+	  }
+	  if (tmp_amp <= -100)
+	  {
+		  dir = UP;
+	  }
+
+	  //u_amp = tmp_amp;
+	  //v_amp = tmp_amp;
+	  //w_amp = tmp_amp;
+	  //t_amp = tmp_amp;
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
+    HAL_Delay(20);
+    GPIOC->ODR ^= GPIO_PIN_13;
+
+    if (HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_12) == GPIO_PIN_RESET)
+    {
+       GPIOB->ODR &= ~GPIO_PIN_12;
+    } else {
+       GPIOB->ODR |= GPIO_PIN_12;
+    }
   }
   /* USER CODE END 3 */
 }
@@ -145,6 +257,63 @@ void SystemClock_Config(void)
 
 /* USER CODE BEGIN 4 */
 
+void HAL_TIM_PeriodElapsedHalfCpltCallback(TIM_HandleTypeDef *htim)
+{
+  if(htim->Instance == TIM1)
+    {
+      GPIOB->ODR &= ~GPIO_PIN_8;
+
+
+#if (PWM_DMA_CHANELS == 3)
+      if (buffer_selected == 0)
+      {
+    	  SCALE_3PHASE_AMPLITUDE(BurstBuffer_2, BurstBuffer_reference, u_amp, v_amp, w_amp, pwm_amplitude, TABLE_SIZE);
+      } else {
+    	  SCALE_3PHASE_AMPLITUDE(BurstBuffer_1, BurstBuffer_reference, u_amp, v_amp, w_amp, pwm_amplitude, TABLE_SIZE);
+      }
+#elif (PWM_DMA_CHANELS == 4)
+      if (buffer_selected == 0)
+      {
+    	  SCALE_4PHASE_AMPLITUDE(BurstBuffer_2, BurstBuffer_reference, u_amp, v_amp, w_amp, t_amp, pwm_amplitude, TABLE_SIZE);
+      } else {
+    	  SCALE_4PHASE_AMPLITUDE(BurstBuffer_1, BurstBuffer_reference, u_amp, v_amp, w_amp, t_amp, pwm_amplitude, TABLE_SIZE);
+      }
+#endif
+
+      GPIOB->ODR |= GPIO_PIN_8;
+
+    }
+}
+
+void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
+{
+  if(htim->Instance == TIM1)
+    {
+      //GPIOB->ODR |= GPIO_PIN_8;
+
+      if (buffer_selected == 0)
+      {
+    	  HAL_TIM_DMABurst_MultiWriteStart(&htim1,
+    	  		                           TIM_DMABASE_CCR1,
+    	  								   TIM_DMA_UPDATE,
+    	  								   (uint32_t*)BurstBuffer_1,
+										   TIM_DMABURSTLENGTH_NUMBER_TRANSFERS,
+    	  								   BURST_SIZE);
+    	  buffer_selected = 1;
+      } else {
+    	  HAL_TIM_DMABurst_MultiWriteStart(&htim1,
+    	  		                           TIM_DMABASE_CCR1,
+    	  								   TIM_DMA_UPDATE,
+    	  								   (uint32_t*)BurstBuffer_2,
+										   TIM_DMABURSTLENGTH_NUMBER_TRANSFERS,
+    	  								   BURST_SIZE);
+    	  buffer_selected = 0;
+      }
+
+      //GPIOB->ODR &= ~GPIO_PIN_8;
+
+    }
+}
 /* USER CODE END 4 */
 
 /**
@@ -156,9 +325,11 @@ void Error_Handler(void)
   /* USER CODE BEGIN Error_Handler_Debug */
   /* User can add his own implementation to report the HAL error return state */
   __disable_irq();
-  while (1)
+  while(1)
   {
-  }
+	  HAL_Delay(1000);
+	  GPIOC->ODR ^= GPIO_PIN_13;
+  };
   /* USER CODE END Error_Handler_Debug */
 }
 
@@ -173,8 +344,13 @@ void Error_Handler(void)
 void assert_failed(uint8_t *file, uint32_t line)
 {
   /* USER CODE BEGIN 6 */
+  while(1)
+  {
+	 HAL_Delay(1500);
+	 GPIOC->ODR ^= GPIO_PIN_13;
+   };
   /* User can add his own implementation to report the file name and line number,
-     ex: printf("Wrong parameters value: file %s on line %d\r\n", file, line) */
+    ex: printf("Wrong parameters value: file %s on line %d\r\n", file, line) */
   /* USER CODE END 6 */
 }
 #endif /* USE_FULL_ASSERT */
