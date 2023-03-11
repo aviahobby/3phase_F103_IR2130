@@ -34,7 +34,7 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
-#define PWM_DMA_CHANELS 3
+#define PWM_DMA_CHANELS 4
 
 #define TABLE_SIZE 128
 #define BURST_SIZE (PWM_DMA_CHANELS * TABLE_SIZE)
@@ -145,11 +145,11 @@ int main(void)
   SCALE_4PHASE_AMPLITUDE(BurstBuffer_2, BurstBuffer_reference, u_amp, v_amp, w_amp, t_amp, pwm_amplitude, TABLE_SIZE);
 #endif
 
-  if (HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_12) == GPIO_PIN_RESET)
+  if (HAL_GPIO_ReadPin(FAULT_IN_GPIO_Port, FAULT_IN_Pin) == GPIO_PIN_RESET)
   {
-     GPIOB->ODR &= ~GPIO_PIN_12;
+   	LED_FAULT_GPIO_Port->ODR &= ~LED_FAULT_Pin;
   } else {
-     GPIOB->ODR |= GPIO_PIN_12;
+   	LED_FAULT_GPIO_Port->ODR |= LED_FAULT_Pin;
   }
   HAL_Delay(100);
 
@@ -173,13 +173,17 @@ int main(void)
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
+#define DYNAMIC_TEST 0//Dynamic test
+#if DYNAMIC_TEST //Dynamic test
   int16_t tmp_amp = -100;
   typedef enum
   { UP, DOWN } dir_t;
   dir_t dir = UP;
+#endif
 
   while (1)
   {
+#if DYNAMIC_TEST //Dynamic test
 	  if (dir == UP)
 	  {
 	     tmp_amp += 1;
@@ -196,21 +200,24 @@ int main(void)
 		  dir = UP;
 	  }
 
-	  //u_amp = tmp_amp;
-	  //v_amp = tmp_amp;
-	  //w_amp = tmp_amp;
-	  //t_amp = tmp_amp;
+	  u_amp = tmp_amp;
+	  v_amp = tmp_amp;
+	  w_amp = tmp_amp;
+#if (PWM_DMA_CHANELS == 4)
+	  t_amp = tmp_amp;
+#endif
+#endif
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
     HAL_Delay(20);
-    GPIOC->ODR ^= GPIO_PIN_13;
+    LED_STATUS_GPIO_Port->ODR ^= LED_STATUS_Pin;
 
-    if (HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_12) == GPIO_PIN_RESET)
+    if (HAL_GPIO_ReadPin(FAULT_IN_GPIO_Port, FAULT_IN_Pin) == GPIO_PIN_RESET)
     {
-       GPIOB->ODR &= ~GPIO_PIN_12;
+    	LED_FAULT_GPIO_Port->ODR &= ~LED_FAULT_Pin;
     } else {
-       GPIOB->ODR |= GPIO_PIN_12;
+    	LED_FAULT_GPIO_Port->ODR |= LED_FAULT_Pin;
     }
   }
   /* USER CODE END 3 */
@@ -261,7 +268,7 @@ void HAL_TIM_PeriodElapsedHalfCpltCallback(TIM_HandleTypeDef *htim)
 {
   if(htim->Instance == TIM1)
     {
-      GPIOB->ODR &= ~GPIO_PIN_8;
+      GPIOB->ODR &= ~GPIO_PIN_3;
 
 
 #if (PWM_DMA_CHANELS == 3)
@@ -280,7 +287,7 @@ void HAL_TIM_PeriodElapsedHalfCpltCallback(TIM_HandleTypeDef *htim)
       }
 #endif
 
-      GPIOB->ODR |= GPIO_PIN_8;
+      GPIOB->ODR |= GPIO_PIN_3;
 
     }
 }
@@ -289,7 +296,7 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 {
   if(htim->Instance == TIM1)
     {
-      //GPIOB->ODR |= GPIO_PIN_8;
+      GPIOB->ODR |= GPIO_PIN_4;
 
       if (buffer_selected == 0)
       {
@@ -310,7 +317,7 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
     	  buffer_selected = 0;
       }
 
-      //GPIOB->ODR &= ~GPIO_PIN_8;
+      GPIOB->ODR &= ~GPIO_PIN_4;
 
     }
 }
@@ -328,7 +335,7 @@ void Error_Handler(void)
   while(1)
   {
 	  HAL_Delay(1000);
-	  GPIOC->ODR ^= GPIO_PIN_13;
+	  LED_STATUS_GPIO_Port->ODR ^= LED_STATUS_Pin;
   };
   /* USER CODE END Error_Handler_Debug */
 }
@@ -347,7 +354,7 @@ void assert_failed(uint8_t *file, uint32_t line)
   while(1)
   {
 	 HAL_Delay(1500);
-	 GPIOC->ODR ^= GPIO_PIN_13;
+	 LED_STATUS_GPIO_Port->ODR ^= LED_STATUS_Pin;
    };
   /* User can add his own implementation to report the file name and line number,
     ex: printf("Wrong parameters value: file %s on line %d\r\n", file, line) */
