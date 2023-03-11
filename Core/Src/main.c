@@ -44,12 +44,12 @@
 /* USER CODE BEGIN PM */
 
 #if (PWM_DMA_CHANELS == 3)
-//#define SCALE_3PHASE_AMPLITUDE scale_3phase_tables_half
-#define SCALE_3PHASE_AMPLITUDE scale_3phase_tables_zero
+#define SCALE_3PHASE_AMPLITUDE scale_3phase_tables_half
+//#define SCALE_3PHASE_AMPLITUDE scale_3phase_tables_zero
 #define TIM_DMABURSTLENGTH_NUMBER_TRANSFERS TIM_DMABURSTLENGTH_3TRANSFERS
 #elif (PWM_DMA_CHANELS == 4)
-//#define SCALE_4PHASE_AMPLITUDE scale_4phase_tables_half
-#define SCALE_4PHASE_AMPLITUDE scale_4phase_tables_zero
+#define SCALE_4PHASE_AMPLITUDE scale_4phase_tables_half
+//#define SCALE_4PHASE_AMPLITUDE scale_4phase_tables_zero
 #define TIM_DMABURSTLENGTH_NUMBER_TRANSFERS TIM_DMABURSTLENGTH_4TRANSFERS
 #else
 #error "Unsupported number of PWM channels"
