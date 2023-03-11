@@ -36,7 +36,7 @@
 /* USER CODE BEGIN PD */
 #define PWM_DMA_CHANELS 4
 
-#define TABLE_SIZE 128
+#define TABLE_SIZE (128*1)
 #define BURST_SIZE (PWM_DMA_CHANELS * TABLE_SIZE)
 /* USER CODE END PD */
 
@@ -55,7 +55,9 @@
 #error "Unsupported number of PWM channels"
 #endif
 
-#define BUILD_LUT LUT_sine_calculate
+#define SQUEEZE 20 //Squeeze ratio
+//#define BUILD_LUT LUT_sine_calculate
+#define BUILD_LUT LUT_3sine_calculate
 //#define BUILD_LUT LUT_triangle_calculate
 //#define BUILD_LUT LUT_const_fill
 
@@ -115,6 +117,8 @@ int main(void)
   MX_DMA_Init();
   MX_TIM1_Init();
   /* USER CODE BEGIN 2 */
+
+  LUT_set_squeeze(SQUEEZE);
 
   uint16_t DataArrayU[TABLE_SIZE];
   uint16_t DataArrayV[TABLE_SIZE];
